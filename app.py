@@ -1,5 +1,5 @@
-# 📦 Bloc 1 : Importations et Gestion de l'historique
-# Ce bloc contient toutes les bibliothèques requises et la logique avancée de réécriture pour la suppression individuelle.
+# 📦 Bloc 1 : Importations et Gestion de l'historique (Spécial Web Cloud)
+# Version allégée sans Tkinter pour fonctionner sur les serveurs Linux de Streamlit Cloud.
 
 import streamlit as st
 import yt_dlp
@@ -9,8 +9,6 @@ import re
 import subprocess
 import sys
 from datetime import datetime
-import tkinter as tk
-from tkinter import filedialog
 
 # Configuration de la page principale
 st.set_page_config(page_title="Téléchargeur Multimédia Universel", page_icon="👑", layout="centered")
@@ -45,19 +43,10 @@ def effacer_historique():
     if os.path.exists(FICHIER_HISTORIQUE):
         os.remove(FICHIER_HISTORIQUE)
 
-# --- SÉLECTIONNEUR DE DOSSIER GRAPHIQUE (TKINTER) ---
-def selectionner_dossier_fenetre():
-    root = tk.Tk()
-    root.withdraw()
-    root.wm_attributes('-topmost', 1)
-    dossier_choisi = filedialog.askdirectory(initialdir=st.session_state.dossier_actuel)
-    root.destroy()
-    if dossier_choisi:
-        st.session_state.dossier_actuel = os.path.abspath(dossier_choisi)
 
 
-# 🎨 Bloc 2 : Interface, Barre latérale et Formulaires d'options
-# Ce bloc gère l'affichage des titres, du bouton de mise à jour de secours, des sélecteurs de formats/résolutions et du découpage de plage horaire.
+# 🎨 Bloc 2 : Interface, Gestion de la File d'Attente et Options
+# Ce bloc gère l'affichage général, la file d'attente et les configurations multimédias.
 
 st.title("👑 Téléchargeur Multimédia Universel")
 st.write("YouTube, TikTok, Vimeo, FB... | Gestion de file d'attente | Tags MP3 automatiques")
@@ -85,7 +74,7 @@ col_url_input, col_btn_add = st.columns(2)
 with col_url_input:
     nouvel_url = st.text_input("Ajouter un lien (YouTube, TikTok, Vimeo, etc.) :", placeholder="https://...", key="url_input")
 with col_btn_add:
-    st.write(" ") # Alignement vertical
+    st.write(" ") 
     if st.button("➕ Ajouter", use_container_width=True):
         if nouvel_url:
             if nouvel_url not in st.session_state.file_attente:
@@ -137,51 +126,21 @@ with col_fin:
     temps_fin = st.text_input("Fin (HH:MM:SS ou MM:SS) :", value="01:00", disabled=not activer_decoupage)
 
 
-# 📂 Bloc 3 : Raccourcis Dossiers et Hook de Progression Interactif
-# Ce bloc configure l'accès direct aux répertoires de votre PC et gère l'affichage dynamique de la barre de progression.
+
+# 📂 Bloc 3 : Emplacement Serveur et Progression
+# Gestion simplifiée du stockage temporaire sur le serveur distant et barre de progression.
 
 st.write("---")
-st.subheader("📁 Dossier d'enregistrement")
+# Sur le serveur cloud, on force l'utilisation du stockage temporaire système
+dossier_final = "/tmp" if os.path.exists("/tmp") else "."
 
-chemin_home = os.path.expanduser("~")
-dossiers_raccourcis = {
-    "📥 Téléchargements": os.path.join(chemin_home, "Downloads"),
-    "🖥️ Bureau": os.path.join(chemin_home, "Desktop"),
-    "🎬 Vidéos": os.path.join(chemin_home, "Videos"),
-    "🎵 Musique": os.path.join(chemin_home, "Music")
-}
-
-if "dossier_actuel" not in st.session_state:
-    st.session_state.dossier_actuel = dossiers_raccourcis["📥 Téléchargements"]
-
-cols_dossiers = st.columns(4)
-for i, (nom_dossier, chemin_dossier) in enumerate(dossiers_raccourcis.items()):
-    with cols_dossiers[i]:
-        if st.button(nom_dossier, use_container_width=True):
-            st.session_state.dossier_actuel = chemin_dossier
-
-# Alignement explicite à 2 colonnes
-col_chemin, col_parcourir = st.columns(2)
-
-with col_chemin:
-    dossier_personnalise = st.text_input("Chemin sélectionné :", value=st.session_state.dossier_actuel, label_visibility="collapsed")
-
-with col_parcourir:
-    if st.button("🔍 Parcourir...", use_container_width=True):
-        selectionner_dossier_fenetre()
-        st.rerun()
-
-if not os.path.exists(dossier_personnalise):
-    try:
-        os.makedirs(dossier_personnalise, exist_ok=True)
-        dossier_final = dossier_personnalise
-    except:
-        dossier_final = dossiers_raccourcis["📥 Téléchargements"]
-else:
-    dossier_final = dossier_personnalise
+# Initialisation d'une variable de stockage globale du dernier fichier téléchargé pour le bouton de téléchargement web
+if "dernier_fichier_telecharge" not in st.session_state:
+    st.session_state.dernier_fichier_telecharge = None
+if "nom_affichage_fichier" not in st.session_state:
+    st.session_state.nom_affichage_fichier = "fichier"
 
 # GESTIONNAIRE DE PROGRESSION INTERACTIVE DYNAMIQUE
-st.write("---")
 zone_titre_actuel = st.empty()
 barre_progression = st.empty()
 zone_statut = st.empty()
@@ -196,18 +155,17 @@ def avancement_hook(d):
             barre_progression.progress(valeur_progression)
             vitesse = re.sub(r'\x1b\[[0-9;]*m', '', d.get('_speed_str', 'Vitesse inconnue'))
             temps_restant = re.sub(r'\x1b\[[0-9;]*m', '', d.get('_eta_str', '--:--'))
-            zone_statut.text(f"📥 Téléchargement : {pourcentage_str.strip()} | {vitesse.strip()} | Restant : {temps_restant.strip()}")
+            zone_statut.text(f"📥 Extraction sur le serveur : {pourcentage_str.strip()} | {vitesse.strip()}")
     elif d['status'] == 'finished':
         zone_statut.text("🎬 Traitement, assemblage ou injection de métadonnées FFmpeg en cours...")
 
 
-# 
 
-# 🚀 Bloc 4 : Traitement par Lot et Historique avec Sécurité Renforcée
-# Ce dernier bloc boucle sur l'ensemble de votre file d'attente, force le découpage FFmpeg et n'enregistre le fichier qu'une fois validé et assemblé sur le disque.
+# 🚀 Bloc 4 : Traitement Cloud, Récupération Web et Historique Sécurisé
+# Contient le bouton d'extraction cloud, le bouton de rapatriement web et l'affichage de l'historique sécurisé.
 
 # 6. ACTION DU BOUTON PRINCIPAL DE TRAITEMENT
-if st.button("🚀 Lancer le téléchargement de la file d'attente", type="primary", use_container_width=True):
+if st.button("🚀 Lancer l'extraction sur le serveur", type="primary", use_container_width=True):
     if not st.session_state.file_attente:
         st.error("Votre file d'attente est vide ! Ajoutez au moins un lien avant de démarrer.")
     else:
@@ -225,7 +183,6 @@ if st.button("🚀 Lancer le téléchargement de la file d'attente", type="prima
                 'ignoreerrors': True,
             }
 
-            # DÉCOUPAGE HORAIRE STRICT
             if activer_decoupage and total_liens == 1:
                 ydl_opts.update({
                     'force_keyframes_at_cuts': True,
@@ -260,23 +217,24 @@ if st.button("🚀 Lancer le téléchargement de la file d'attente", type="prima
             try:
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                     zone_statut.text(f"🔍 Analyse de la source ({idx_lien+1}/{total_liens})...")
-                    
-                    # On extrait d'abord les infos
                     info_dict = ydl.extract_info(cible_url, download=True)
                     
                     if info_dict:
                         if 'entries' in info_dict:
                             for entry in info_dict['entries']:
                                 if entry:
-                                    # Correction : Récupération du titre et construction du chemin final propre après traitement
                                     titre = entry.get('title', 'Médias Playlist')
                                     ext_finale = "mp3" if format_choisi == "Audio uniquement (MP3)" else "mp4"
                                     chemin_final_propre = os.path.join(dossier_final, f"{titre}.{ext_finale}")
+                                    st.session_state.dernier_fichier_telecharge = chemin_final_propre
+                                    st.session_state.nom_affichage_fichier = f"{titre}.{ext_finale}"
                                     enregistrer_dans_historique(titre, entry.get('webpage_url', cible_url), format_choisi, chemin_final_propre)
                         else:
                             titre = info_dict.get('title', 'Média Unique')
                             ext_finale = "mp3" if format_choisi == "Audio uniquement (MP3)" else "mp4"
                             chemin_final_propre = os.path.join(dossier_final, f"{titre}.{ext_finale}")
+                            st.session_state.dernier_fichier_telecharge = chemin_final_propre
+                            st.session_state.nom_affichage_fichier = f"{titre}.{ext_finale}"
                             enregistrer_dans_historique(titre, cible_url, format_choisi, chemin_final_propre)
                 
                 st.session_state.file_attente.remove(cible_url)
@@ -285,8 +243,24 @@ if st.button("🚀 Lancer le téléchargement de la file d'attente", type="prima
         
         barre_progression.empty()
         zone_statut.empty()
-        st.success(f"🎉 Tous les traitements ont été complétés !")
+        st.success(f"🎉 Extraction serveur terminée avec succès !")
         st.rerun()
+
+# --- AJOUT CRUCIAL DU BOUTON DE TELECHARGEMENT CLIENT WEB ---
+if st.session_state.dernier_fichier_telecharge and os.path.exists(st.session_state.dernier_fichier_telecharge):
+    st.write("---")
+    st.subheader("💾 Enregistrer le fichier sur votre appareil")
+    try:
+        with open(st.session_state.dernier_fichier_telecharge, "rb") as f:
+            st.download_button(
+                label=f"📥 Sauvegarder : {st.session_state.nom_affichage_fichier}",
+                data=f.read(),
+                file_name=st.session_state.nom_affichage_fichier,
+                mime="video/mp4" if st.session_state.nom_affichage_fichier.endswith(".mp4") else "audio/mp3",
+                use_container_width=True
+            )
+    except:
+        st.caption("Fichier disponible dans l'historique ci-dessous.")
 
 # 7. SECTION HISTORIQUE DE VUE ET SUPPRESSION INDIVIDUELLE SÉCURISÉE
 st.write("---")
@@ -299,32 +273,27 @@ if not lignes_historique:
 else:
     if st.button("🗑️ Effacer TOUT l'historique", type="secondary", use_container_width=True):
         effacer_historique()
+        st.session_state.dernier_fichier_telecharge = None
         st.rerun()
     
     st.write("")
-    
     for i in reversed(range(len(lignes_historique))):
         item = lignes_historique[i]
         parties = item.strip().split(" | ")
-        
         if len(parties) >= 3:
             col_texte, col_suppr = st.columns(2)
-            
             with col_texte:
-                st.markdown(f"• {parties} | {parties} | {parties}")
-            
+                st.markdown(f"• {parties[0]} | {parties[1]} | {parties[2]}")
             with col_suppr:
                 if st.button("❌", key=f"del_{i}", help="Supprimer cette ligne"):
                     supprimer_element_historique(i)
                     st.rerun()
             
             if len(parties) == 4:
-                chemin_cible_brut = str(parties).strip()
-                
+                chemin_cible_brut = str(parties[3]).strip()
                 if chemin_cible_brut and not chemin_cible_brut.startswith("[") and os.path.exists(chemin_cible_brut):
-                    ext_media = os.path.splitext(chemin_cible_brut).lower()
-                    
-                    with st.expander(f"▶️ Visionner / Écouter l'enregistrement local"):
+                    ext_media = os.path.splitext(chemin_cible_brut)[1].lower()
+                    with st.expander(f"▶️ Visionner / Écouter l'enregistrement"):
                         try:
                             with open(chemin_cible_brut, "rb") as media_file:
                                 bytes_data = media_file.read()
@@ -332,9 +301,8 @@ else:
                                     st.audio(bytes_data, format="audio/mp3")
                                 else:
                                     st.video(bytes_data, format="video/mp4")
-                        except Exception as media_err:
-                            st.caption("Lecture locale temporairement verrouillée par le système de stockage.")
+                        except:
+                            st.caption("Lecture indisponible.")
             st.write("---")
-
 
 
