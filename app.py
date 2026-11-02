@@ -236,7 +236,6 @@ if st.button("🚀 Lancer l'extraction sur le serveur", type="primary", use_cont
                                     nom_base, _ = os.path.splitext(chemin_temporaire)
                                     chemin_réel = nom_base + f".{ext_finale}"
                                     
-                                    # SAUVEGARDE EN MÉMOIRE RETAIN CLOUD : On lit le fichier immédiatement avant qu'il ne s'efface
                                     if os.path.exists(chemin_réel):
                                         cle_cle = f"{titre}_{idx_lien}"
                                         with open(chemin_réel, "rb") as f_bytes:
@@ -250,10 +249,11 @@ if st.button("🚀 Lancer l'extraction sur le serveur", type="primary", use_cont
                             chemin_réel = nom_base + f".{ext_finale}"
                             
                             if os.path.exists(chemin_réel):
-                                cle_cle = f"{titre}_{idx_lien}_{datetime.now().strftime('%M%S')}"
+                                titre_nettoye = re.sub(r'\W+', '', titre)
+                                cle_cle = f"{titre_nettoye}_{datetime.now().strftime('%M%S')}"
                                 with open(chemin_réel, "rb") as f_bytes:
                                     st.session_state.fichiers_memoire[cle_cle] = f_bytes.read()
-                                enregistrer_dans_historique(titre, cible_url, format_choisi, cle_cle)
+                                registr_dans_hist = enregistrer_dans_historique(titre, cible_url, format_choisi, cle_cle)
                 
                 if cible_url in st.session_state.file_attente:
                     st.session_state.file_attente.remove(cible_url)
@@ -284,21 +284,19 @@ else:
         item = lignes_historique[i]
         parties = item.strip().split(" | ")
         if len(parties) >= 3:
+            # CORRECTION : st.columns(3) simple et universel sans proportions complexes
             col_texte, col_recup, col_suppr = st.columns(3)
             
             with col_texte:
                 st.markdown(f"• {parties} | {parties} | {parties}")
             
-            # Récupération de la clé de stockage en mémoire vive
             cle_stockage = parties.strip() if len(parties) == 4 else ""
             
             with col_recup:
-                # Si le fichier est présent en mémoire vive sécurisée de la session
                 if cle_stockage in st.session_state.fichiers_memoire:
                     donnees_binaires = st.session_state.fichiers_memoire[cle_stockage]
                     ext = "mp3" if "MP3" in parties else "mp4"
-                    # Extraction du nom d'affichage à partir de la clé
-                    nom_nettoyé = cle_stockage.split("_")[0] + f".{ext}"
+                    nom_nettoyé = f"telechargement.{ext}"
                     
                     st.download_button(
                         label="📥 Sauvegarder",
@@ -308,7 +306,7 @@ else:
                         key=f"dl_mem_{i}"
                     )
                 else:
-                    st.caption("Fichier expiré (Session close)")
+                    st.caption("Fichier expiré ou absent")
             
             with col_suppr:
                 if st.button("❌", key=f"del_{i}", help="Supprimer cette ligne"):
