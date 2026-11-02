@@ -161,12 +161,11 @@ def avancement_hook(d):
 
 
 
-# 🚀 Bloc 4 : Traitement par Lot et Historique avec Téléchargement Web Intégré
-# Ce dernier bloc boucle sur l'ensemble de votre file d'attente et génère des boutons de téléchargement permanents directement dans l'historique.
+# 🚀 Bloc 4 : Traitement par Lot et Historique avec Extraction et Liens Web Propres
+# Ce bloc nettoie l'analyse des chaînes de caractères de l'historique pour afficher le titre propre et valider le chemin serveur du fichier.
 
 # 6. ACTION DU BOUTON PRINCIPAL DE TRAITEMENT
 if st.button("🚀 Lancer l'extraction sur le serveur", type="primary", use_container_width=True):
-    # Sécurité au cas où l'utilisateur oublie de cliquer sur "+ Ajouter"
     liens_a_traiter = list(st.session_state.file_attente)
     if not liens_a_traiter and url:
         liens_a_traiter.append(url)
@@ -214,7 +213,7 @@ if st.button("🚀 Lancer l'extraction sur le serveur", type="primary", use_cont
                 else:
                     filtre_format = 'bestvideo+bestaudio/best'
                 ydl_opts.update({
-                    'format': filtro_format if 'filtro_format' in locals() else filtre_format,
+                    'format': filtre_format,
                     'merge_output_format': 'mp4',
                 })
 
@@ -247,7 +246,7 @@ if st.button("🚀 Lancer l'extraction sur le serveur", type="primary", use_cont
         st.success(f"🎉 Extraction terminée avec succès !")
         st.rerun()
 
-# 7. SECTION HISTORIQUE ET BOUTONS DE SAUVEGARDE WEB DIRECTS
+# 7. SECTION HISTORIQUE DE VUE ET SUPPRESSION INDIVIDUELLE SÉCURISÉE NATIVE
 st.write("---")
 st.subheader("📜 Historique et Lecteur Multimédia")
 
@@ -261,21 +260,28 @@ else:
         st.rerun()
     
     st.write("")
+    
+    # Inversion manuelle propre de l'affichage (plus récent en haut) tout en gardant l'index exact pour la suppression
     for i in reversed(range(len(lignes_historique))):
         item = lignes_historique[i]
         parties = item.strip().split(" | ")
-        if len(parties) >= 3:
-            # Séparation propre de l'affichage sur 3 colonnes : Infos | Sauvegarder | Supprimer
-            col_texte, col_recup, col_suppr = st.columns([6, 3, 1])
+        
+        if len(parties) == 4:
+            date_telechargement = parties[0]
+            type_format = parties[1]
+            lien_markdown_titre = parties[2]
+            chemin_fic_media = parties[3]
+            
+            # Affichage sur 3 colonnes distinctes et propres
+            col_texte, col_recup, col_suppr = st.columns([6, 2, 1])
             
             with col_texte:
-                st.markdown(f"• {parties} | {parties} | {parties}")
-            
-            # AMÉLIORATION : Bouton de téléchargement web permanent s'adaptant à chaque ligne
-            chemin_fic_media = str(parties).strip() if len(parties) == 4 else ""
+                # Affiche proprement la date, le format et le titre cliquable
+                st.markdown(f"• {date_telechargement} | {type_format} | {lien_markdown_titre}")
             
             with col_recup:
-                if chemin_fic_media and not chemin_fic_media.startswith("[") and os.path.exists(chemin_fic_media):
+                # Vérifie si le fichier physique est toujours présent sur le serveur temporaire Linux
+                if chemin_fic_media and os.path.exists(chemin_fic_media):
                     nom_fic = os.path.basename(chemin_fic_media)
                     try:
                         with open(chemin_fic_media, "rb") as file_data:
@@ -287,14 +293,12 @@ else:
                                 key=f"dl_btn_{i}"
                             )
                     except:
-                        st.caption("Fichier expiré")
+                        st.caption("Fichier verrouillé")
                 else:
-                    st.caption("Fichier non trouvé sur le serveur")
+                    st.caption("Fichier expiré ou non trouvé")
             
             with col_suppr:
                 if st.button("❌", key=f"del_{i}", help="Supprimer cette ligne"):
                     supprimer_element_historique(i)
                     st.rerun()
             st.write("---")
-
-
