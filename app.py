@@ -161,8 +161,12 @@ def avancement_hook(d):
 
 
 
-# 🚀 Bloc 4 : Traitement par Lot et Historique avec Extraction et Liens Web Propres
-# Ce bloc nettoie l'analyse des chaînes de caractères de l'historique pour afficher le titre propre et valider le chemin serveur du fichier.
+# 🚀 Bloc 4 : Traitement par Lot et Stockage en Mémoire Session
+# Ce dernier bloc extrait les vidéos, les convertit en données binaires persistantes en mémoire et active les boutons de téléchargement direct.
+
+# Initialisation du dictionnaire de stockage des fichiers en mémoire vive si absent
+if "fichiers_memoire" not in st.session_state:
+    st.session_state.fichiers_memoire = {}
 
 # 6. ACTION DU BOUTON PRINCIPAL DE TRAITEMENT
 if st.button("🚀 Lancer l'extraction sur le serveur", type="primary", use_container_width=True):
@@ -177,7 +181,7 @@ if st.button("🚀 Lancer l'extraction sur le serveur", type="primary", use_cont
         total_liens = len(liens_a_traiter)
         
         for idx_lien, cible_url in enumerate(liens_a_traiter):
-            st.toast(f"Traitement du lien {idx_lien + 1}/{total_liens}...")
+            st.toast(f"Extraction du lien {idx_lien + 1}/{total_liens}...")
             
             ydl_opts = {
                 'outtmpl': os.path.join(dossier_final, '%(title)s.%(ext)s'),
@@ -219,7 +223,7 @@ if st.button("🚀 Lancer l'extraction sur le serveur", type="primary", use_cont
 
             try:
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                    zone_statut.text(f"🔍 Analyse de la source ({idx_lien+1}/{total_liens})...")
+                    zone_statut.text(f"🔍 Analyse et conversion ({idx_lien+1}/{total_liens})...")
                     info_dict = ydl.extract_info(cible_url, download=True)
                     
                     if info_dict:
@@ -228,13 +232,28 @@ if st.button("🚀 Lancer l'extraction sur le serveur", type="primary", use_cont
                                 if entry:
                                     titre = entry.get('title', 'Médias Playlist')
                                     ext_finale = "mp3" if format_choisi == "Audio uniquement (MP3)" else "mp4"
-                                    chemin_final_propre = os.path.join(dossier_final, f"{titre}.{ext_finale}")
-                                    enregistrer_dans_historique(titre, entry.get('webpage_url', cible_url), format_choisi, chemin_final_propre)
+                                    chemin_temporaire = ydl.prepare_filename(entry)
+                                    nom_base, _ = os.path.splitext(chemin_temporaire)
+                                    chemin_réel = nom_base + f".{ext_finale}"
+                                    
+                                    # SAUVEGARDE EN MÉMOIRE RETAIN CLOUD : On lit le fichier immédiatement avant qu'il ne s'efface
+                                    if os.path.exists(chemin_réel):
+                                        cle_cle = f"{titre}_{idx_lien}"
+                                        with open(chemin_réel, "rb") as f_bytes:
+                                            st.session_state.fichiers_memoire[cle_cle] = f_bytes.read()
+                                        enregistrer_dans_historique(titre, entry.get('webpage_url', cible_url), format_choisi, cle_cle)
                         else:
                             titre = info_dict.get('title', 'Média Unique')
                             ext_finale = "mp3" if format_choisi == "Audio uniquement (MP3)" else "mp4"
-                            chemin_final_propre = os.path.join(dossier_final, f"{titre}.{ext_finale}")
-                            enregistrer_dans_historique(titre, cible_url, format_choisi, chemin_final_propre)
+                            chemin_temporaire = ydl.prepare_filename(info_dict)
+                            nom_base, _ = os.path.splitext(chemin_temporaire)
+                            chemin_réel = nom_base + f".{ext_finale}"
+                            
+                            if os.path.exists(chemin_réel):
+                                cle_cle = f"{titre}_{idx_lien}_{datetime.now().strftime('%M%S')}"
+                                with open(chemin_réel, "rb") as f_bytes:
+                                    st.session_state.fichiers_memoire[cle_cle] = f_bytes.read()
+                                enregistrer_dans_historique(titre, cible_url, format_choisi, cle_cle)
                 
                 if cible_url in st.session_state.file_attente:
                     st.session_state.file_attente.remove(cible_url)
@@ -243,10 +262,10 @@ if st.button("🚀 Lancer l'extraction sur le serveur", type="primary", use_cont
         
         barre_progression.empty()
         zone_statut.empty()
-        st.success(f"🎉 Extraction terminée avec succès !")
+        st.success(f"🎉 Extraction serveur terminée avec succès !")
         st.rerun()
 
-# 7. SECTION HISTORIQUE DE VUE ET SUPPRESSION INDIVIDUELLE SÉCURISÉE NATIVE
+# 7. SECTION HISTORIQUE DE VUE ET TÉLÉCHARGEMENT SÉCURISÉ EN MÉMOIRE
 st.write("---")
 st.subheader("📜 Historique et Lecteur Multimédia")
 
@@ -257,48 +276,44 @@ if not lignes_historique:
 else:
     if st.button("🗑️ Effacer TOUT l'historique", type="secondary", use_container_width=True):
         effacer_historique()
+        st.session_state.fichiers_memoire = {}
         st.rerun()
     
     st.write("")
-    
-    # Inversion manuelle propre de l'affichage (plus récent en haut) tout en gardant l'index exact pour la suppression
     for i in reversed(range(len(lignes_historique))):
         item = lignes_historique[i]
         parties = item.strip().split(" | ")
-        
-        if len(parties) == 4:
-            date_telechargement = parties[0]
-            type_format = parties[1]
-            lien_markdown_titre = parties[2]
-            chemin_fic_media = parties[3]
-            
-            # Affichage sur 3 colonnes distinctes et propres
-            col_texte, col_recup, col_suppr = st.columns([6, 2, 1])
+        if len(parties) >= 3:
+            col_texte, col_recup, col_suppr = st.columns(3)
             
             with col_texte:
-                # Affiche proprement la date, le format et le titre cliquable
-                st.markdown(f"• {date_telechargement} | {type_format} | {lien_markdown_titre}")
+                st.markdown(f"• {parties} | {parties} | {parties}")
+            
+            # Récupération de la clé de stockage en mémoire vive
+            cle_stockage = parties.strip() if len(parties) == 4 else ""
             
             with col_recup:
-                # Vérifie si le fichier physique est toujours présent sur le serveur temporaire Linux
-                if chemin_fic_media and os.path.exists(chemin_fic_media):
-                    nom_fic = os.path.basename(chemin_fic_media)
-                    try:
-                        with open(chemin_fic_media, "rb") as file_data:
-                            st.download_button(
-                                label="📥 Sauvegarder",
-                                data=file_data.read(),
-                                file_name=nom_fic,
-                                mime="video/mp4" if nom_fic.endswith(".mp4") else "audio/mp3",
-                                key=f"dl_btn_{i}"
-                            )
-                    except:
-                        st.caption("Fichier verrouillé")
+                # Si le fichier est présent en mémoire vive sécurisée de la session
+                if cle_stockage in st.session_state.fichiers_memoire:
+                    donnees_binaires = st.session_state.fichiers_memoire[cle_stockage]
+                    ext = "mp3" if "MP3" in parties else "mp4"
+                    # Extraction du nom d'affichage à partir de la clé
+                    nom_nettoyé = cle_stockage.split("_")[0] + f".{ext}"
+                    
+                    st.download_button(
+                        label="📥 Sauvegarder",
+                        data=donnees_binaires,
+                        file_name=nom_nettoyé,
+                        mime="audio/mp3" if ext == "mp3" else "video/mp4",
+                        key=f"dl_mem_{i}"
+                    )
                 else:
-                    st.caption("Fichier expiré ou non trouvé")
+                    st.caption("Fichier expiré (Session close)")
             
             with col_suppr:
                 if st.button("❌", key=f"del_{i}", help="Supprimer cette ligne"):
+                    if cle_stockage in st.session_state.fichiers_memoire:
+                        del st.session_state.fichiers_memoire[cle_stockage]
                     supprimer_element_historique(i)
                     st.rerun()
             st.write("---")
