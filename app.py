@@ -161,17 +161,21 @@ def avancement_hook(d):
 
 
 
-# 🚀 Bloc 4 : Traitement Cloud, Récupération Web et Historique Sécurisé
-# Contient le bouton d'extraction cloud, le bouton de rapatriement web et l'affichage de l'historique sécurisé.
+# 🚀 Bloc 4 : Traitement par Lot et Historique avec Téléchargement Web Intégré
+# Ce dernier bloc boucle sur l'ensemble de votre file d'attente et génère des boutons de téléchargement permanents directement dans l'historique.
 
 # 6. ACTION DU BOUTON PRINCIPAL DE TRAITEMENT
 if st.button("🚀 Lancer l'extraction sur le serveur", type="primary", use_container_width=True):
-    if not st.session_state.file_attente:
-        st.error("Votre file d'attente est vide ! Ajoutez au moins un lien avant de démarrer.")
+    # Sécurité au cas où l'utilisateur oublie de cliquer sur "+ Ajouter"
+    liens_a_traiter = list(st.session_state.file_attente)
+    if not liens_a_traiter and url:
+        liens_a_traiter.append(url)
+        
+    if not liens_a_traiter:
+        st.error("Votre file d'attente est vide ! Ajoutez un lien avec le bouton '+ Ajouter' avant de démarrer.")
     else:
         chemin_ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
-        total_liens = len(st.session_state.file_attente)
-        liens_a_traiter = list(st.session_state.file_attente)
+        total_liens = len(liens_a_traiter)
         
         for idx_lien, cible_url in enumerate(liens_a_traiter):
             st.toast(f"Traitement du lien {idx_lien + 1}/{total_liens}...")
@@ -210,7 +214,7 @@ if st.button("🚀 Lancer l'extraction sur le serveur", type="primary", use_cont
                 else:
                     filtre_format = 'bestvideo+bestaudio/best'
                 ydl_opts.update({
-                    'format': filtre_format,
+                    'format': filtro_format if 'filtro_format' in locals() else filtre_format,
                     'merge_output_format': 'mp4',
                 })
 
@@ -226,43 +230,24 @@ if st.button("🚀 Lancer l'extraction sur le serveur", type="primary", use_cont
                                     titre = entry.get('title', 'Médias Playlist')
                                     ext_finale = "mp3" if format_choisi == "Audio uniquement (MP3)" else "mp4"
                                     chemin_final_propre = os.path.join(dossier_final, f"{titre}.{ext_finale}")
-                                    st.session_state.dernier_fichier_telecharge = chemin_final_propre
-                                    st.session_state.nom_affichage_fichier = f"{titre}.{ext_finale}"
                                     enregistrer_dans_historique(titre, entry.get('webpage_url', cible_url), format_choisi, chemin_final_propre)
                         else:
                             titre = info_dict.get('title', 'Média Unique')
                             ext_finale = "mp3" if format_choisi == "Audio uniquement (MP3)" else "mp4"
                             chemin_final_propre = os.path.join(dossier_final, f"{titre}.{ext_finale}")
-                            st.session_state.dernier_fichier_telecharge = chemin_final_propre
-                            st.session_state.nom_affichage_fichier = f"{titre}.{ext_finale}"
                             enregistrer_dans_historique(titre, cible_url, format_choisi, chemin_final_propre)
                 
-                st.session_state.file_attente.remove(cible_url)
+                if cible_url in st.session_state.file_attente:
+                    st.session_state.file_attente.remove(cible_url)
             except Exception as e:
                 st.error(f"Une erreur est survenue sur le lien {cible_url} : {e}")
         
         barre_progression.empty()
         zone_statut.empty()
-        st.success(f"🎉 Extraction serveur terminée avec succès !")
+        st.success(f"🎉 Extraction terminée avec succès !")
         st.rerun()
 
-# --- AJOUT CRUCIAL DU BOUTON DE TELECHARGEMENT CLIENT WEB ---
-if st.session_state.dernier_fichier_telecharge and os.path.exists(st.session_state.dernier_fichier_telecharge):
-    st.write("---")
-    st.subheader("💾 Enregistrer le fichier sur votre appareil")
-    try:
-        with open(st.session_state.dernier_fichier_telecharge, "rb") as f:
-            st.download_button(
-                label=f"📥 Sauvegarder : {st.session_state.nom_affichage_fichier}",
-                data=f.read(),
-                file_name=st.session_state.nom_affichage_fichier,
-                mime="video/mp4" if st.session_state.nom_affichage_fichier.endswith(".mp4") else "audio/mp3",
-                use_container_width=True
-            )
-    except:
-        st.caption("Fichier disponible dans l'historique ci-dessous.")
-
-# 7. SECTION HISTORIQUE DE VUE ET SUPPRESSION INDIVIDUELLE SÉCURISÉE
+# 7. SECTION HISTORIQUE ET BOUTONS DE SAUVEGARDE WEB DIRECTS
 st.write("---")
 st.subheader("📜 Historique et Lecteur Multimédia")
 
@@ -273,7 +258,6 @@ if not lignes_historique:
 else:
     if st.button("🗑️ Effacer TOUT l'historique", type="secondary", use_container_width=True):
         effacer_historique()
-        st.session_state.dernier_fichier_telecharge = None
         st.rerun()
     
     st.write("")
@@ -281,28 +265,36 @@ else:
         item = lignes_historique[i]
         parties = item.strip().split(" | ")
         if len(parties) >= 3:
-            col_texte, col_suppr = st.columns(2)
+            # Séparation propre de l'affichage sur 3 colonnes : Infos | Sauvegarder | Supprimer
+            col_texte, col_recup, col_suppr = st.columns([6, 3, 1])
+            
             with col_texte:
-                st.markdown(f"• {parties[0]} | {parties[1]} | {parties[2]}")
+                st.markdown(f"• {parties} | {parties} | {parties}")
+            
+            # AMÉLIORATION : Bouton de téléchargement web permanent s'adaptant à chaque ligne
+            chemin_fic_media = str(parties).strip() if len(parties) == 4 else ""
+            
+            with col_recup:
+                if chemin_fic_media and not chemin_fic_media.startswith("[") and os.path.exists(chemin_fic_media):
+                    nom_fic = os.path.basename(chemin_fic_media)
+                    try:
+                        with open(chemin_fic_media, "rb") as file_data:
+                            st.download_button(
+                                label="📥 Sauvegarder",
+                                data=file_data.read(),
+                                file_name=nom_fic,
+                                mime="video/mp4" if nom_fic.endswith(".mp4") else "audio/mp3",
+                                key=f"dl_btn_{i}"
+                            )
+                    except:
+                        st.caption("Fichier expiré")
+                else:
+                    st.caption("Fichier non trouvé sur le serveur")
+            
             with col_suppr:
                 if st.button("❌", key=f"del_{i}", help="Supprimer cette ligne"):
                     supprimer_element_historique(i)
                     st.rerun()
-            
-            if len(parties) == 4:
-                chemin_cible_brut = str(parties[3]).strip()
-                if chemin_cible_brut and not chemin_cible_brut.startswith("[") and os.path.exists(chemin_cible_brut):
-                    ext_media = os.path.splitext(chemin_cible_brut)[1].lower()
-                    with st.expander(f"▶️ Visionner / Écouter l'enregistrement"):
-                        try:
-                            with open(chemin_cible_brut, "rb") as media_file:
-                                bytes_data = media_file.read()
-                                if ext_media == ".mp3":
-                                    st.audio(bytes_data, format="audio/mp3")
-                                else:
-                                    st.video(bytes_data, format="video/mp4")
-                        except:
-                            st.caption("Lecture indisponible.")
             st.write("---")
 
 
