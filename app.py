@@ -1,4 +1,4 @@
-# 📦 Bloc 1 : Importations et Fonctions Historique
+# 📦 Bloc 1 : Importations et Fonctions Historique (Version Cloud Allégée)
 import streamlit as st
 import yt_dlp
 import os
