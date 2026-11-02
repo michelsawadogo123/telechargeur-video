@@ -38,6 +38,8 @@ def effacer_historique():
         os.remove(FICHIER_HISTORIQUE)
 
 
+
+
 # 🎨 Bloc 2 : Interface et File d'Attente
 st.set_page_config(page_title="Téléchargeur Multimédia Universel", page_icon="👑", layout="centered")
 
@@ -82,11 +84,12 @@ if st.session_state.file_attente:
             if c_action.button("Retirer", key=f"rem_q_{index}"):
                 st.session_state.file_attente.pop(index)
                 st.rerun()
-        if st.button("扫 Vider la file", type="secondary"):
+        if st.button("🧹 Vider la file", type="secondary"):
             st.session_state.file_attente = []
             st.rerun()
 else:
     st.info("La file d'attente est vide.")
+
 
 
 # 📂 Bloc 3 : Options et Moteur de Progression
